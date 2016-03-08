@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+    <h2>Fruit Shop</h2>
+    <form class="form-inline" action="{% url 'home' %}" method="post">
+        <div class="form-group">
+            <label for="fruit_type">Fruit:</label>
+            <select class="form-control" name="fruit_type">
+                <option>Apple</option>
+                <option>Banana</option>
+                <option>Watermelon</option>
+                <option>Mango</option>
+                <option>Strawberry</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="num_fruit">Quantity</label>
+            <input type="number" class="form-control" name="num_fruit"
+                   min="1" max="5" value="1">
+        </div>
+        <button type="submit" class="btn btn-default">Send invitation</button>
+        {% csrf_token %}
+    </form>
+
+
+    <h2>Queued Tasks</h2>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>Task ID</th>
+            <th>Task Type</th>
+            <th>Task Params</th>
+            <th>Created</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for task in queue_orders %}
+            <tr>
+                <td>{{ task.name }}</td>
+                <td>{{ task.func }}</td>
+                <td>{{ task.task.kwargs }}</td>
+                <td>{{ task.task.started|naturaltime }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Order History</h2>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th>Order Name</th>
+            <th>Fruit</th>
+            <th>Quantity</th>
+            <th>Result</th>
+            <th>Time taken</th>
+            <th>Complete on</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for task in complete_orders %}
+            <tr>
+                <td>{{ task.name }}</td>
+                <td>{{ task.kwargs.fruit }}</td>
+                <td>{{ task.kwargs.num_fruit }}</td>
+                <td>{{ task.result }}</td>
+                <td>{{ task.time_taken }}</td>
+                <td>{{ task.stopped|naturaltime }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}
