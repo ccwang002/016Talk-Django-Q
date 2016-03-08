@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Liang2's Slides</title>
+	<meta name="viewport" content="width=792, user-scalable=no">
+	<meta http-equiv="x-ua-compatible" content="ie=edge">
+	<!-- Icon -->
+	<link href="pics/favicon.png" rel="icon" type="image/x-icon" />
+	<!-- MathJax -->
+	<!-- CSS Stle -->
+	<link rel="stylesheet" href="lib/shower/themes/material/styles/screen-16x10.css">
+	<link rel="stylesheet" href="lib/highlight/styles/github.min.css" type="text/css"/>
+	<link rel="stylesheet" href="static/custom.css" type="text/css"/>
+</head>
+<body class="shower list">
+	<!-- Header in overview -->
+	<header class="caption">
+		<h1>Django Task Queue: Django-Q</h1>
+		<p style="line-height: 32px; padding-top:15px;"><a href="http://liang2.tw">Liang Bo Wang (亮亮)</a>, 2016-02-25</p>
+	</header>
+
+	<!-- Cover Slide -->
+	<section id="cover" class="slide no-slide-number">
+		<h2 id="talk-header">Django-Q<br>Django Task Queue</h2>
+		<p id="talk-author">
+			By <a href="http://liang2.tw" target="_blank">Liang<sup>2</sup></a> under CC 4.0 BY license
+		</p>
+		<p id="usage-instr">
+			<kbd>Esc</kbd> to overview <br />
+			<kbd>←</kbd> <kbd>→</kbd> to navigate
+		</p>
+		<img src="pics/cover.jpg" class="cover w" alt="">
+		<style>
+			#talk-header,
+			#talk-author {
+				left: 56px;
+			}
+			#talk-header {
+				color: #EEE;
+				text-align: left;
+				font-size: 100px;
+				line-height: 1.3em;
+				text-shadow: -1px 1px 3px #000;
+				bottom: 160px;
+				position: absolute;
+
+			}
+			#talk-author {
+				line-height: 1.2em;
+				text-shadow: -1px 1px 3px #000;
+				bottom: 120px;
+				position: absolute;
+			}
+			#talk-author a {
+				color: #FFFA20;
+			}
+			#cover p {
+				margin: 10px 0 0;
+				color: #FFF;
+				font-size: 32px;
+				opacity: 1;
+			}
+			#usage-instr {
+				position: absolute;
+				text-align: right;
+				right: 30px;
+				bottom: 40px;
+			}
+			#usage-instr kbd {
+				opacity: 0.8;
+				color: #666;
+				background-color: white;
+			}
+			#cover img {
+				opacity: 0.95;
+			}
+			#cover {
+				background: black;
+			}
+		</style>
+	</section>
+
+	<section class="slide">
+		<h2><mark>Async task</mark> on server side</h2>
+		<p>Actions that take &gt; 1 second. Common ones:</p>
+		<ul>
+			<li>Send email</li>
+			<li>Process thumbnails</li>
+			<li>Generate report</li>
+		</ul>
+		<p>
+			You don't want to keep user awaited, hence <strong>async</strong>.<br>
+			All tasks can happen simultaneously. You need a <strong>job queue</strong>.
+		</p>
+	</section>
+
+	<section class="slide twocol-lr">
+		<h2><mark>Django-Q</mark>: a task queue for Django</h2>
+		<div style="display: inline-block">
+		<div class="left">
+			<img src="pics/django_q_logo.png" alt="">
+		</div>
+		<div class="right">
+			<figure>
+				<blockquote><p>
+						Django Q is a native Django task queue, scheduler and worker application using Python multiprocessing.
+				</p></blockquote>
+				<figcaption>
+					&mdash; <a href="https://django-q.readthedocs.org/">Django Q documentation</a>
+				</figcaption>
+			</figure>
+		</div>
+		</div>
+		<ul>
+			<li>Clean and small codebase (well, compared to Celery)</li>
+			<li>Support Django 1.8 and 1.9</li>
+			<li>Python 2/3 compatibility via <a href="http://python-future.org/">future</a></li>
+		</p>
+	</section>
+
+	<section class="slide">
+		<h2>Django-Q <mark>features</mark></h2>
+		<ul>
+			<li>Multiprocessing workers</li>
+			<li>Scheduling</li>
+			<li>Django Admin integration</li>
+			<li>Encryption and compression for task payload</li>
+			<li>Result hooks, groups and chains</li>
+			<li>All achieved using <strong>only database and Django cache framework</strong></li>
+			<li>Brokers support Redis, Disque, IronMQ, SQS, MongoDB or ORM</li>
+		</ul>
+		<p>Django-Q guarantees <em>at least once</em> successful task delivery</p>
+	</section>
+
+
+	<!-- django-q tutorial -->
+	<section class="slide mid">
+		<h2>Django-Q Tutorial</h2>
+		<img src="pics/mid.jpg" class="cover w" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Let's open a fruits shop!</h2>
+		<ul>
+			<li>People can order several types of fruits and their quantity</li>
+			<li>1 quantity = 1 second to process</li>
+			<li>The shop has plenty of customers, make a queue!</li>
+			<li>Even if we cannot process the order immediately, we tell customer to wait.</li>
+
+		</ul>
+		<p>In Django and Django-Q</p>
+	</section>
+
+	<section class="slide">
+		<h2>Initiate our Django project</h2>
+		<pre class="language-bash">
+			<code>pip install django django-q
+
+# start the project
+django-admin startproject djangoq_demo
+django-admin startapp fruit_shop</code>
+		</pre>
+		<p>Add <code>'django_q'</code> in <code>INSTALLED_APPS</code> and run the migration.</p>
+	</section>
+
+	<section class="slide">
+		<h2 class="tighter">Django-Q setting</h2>
+		<p>Use Django ORM as result storage and broker.</p>
+		<pre class="language-python tighter">
+<code># In django_demo/settings.py
+Q_CLUSTER = {
+    'name': 'DjangoORM',
+    'timeout': 1200,	# Timeout in secs for a task
+    'save_limit': 10,	# Store latest 10 results only
+    'catch_up': False,	# Ignore un-run scheduled tasks
+    'orm': 'default'	# Django database connection
+}</code>
+		</pre>
+	</section>
+
+	<section class="slide">
+		<h2 class="tighter">Django cache framework</h2>
+		<p>Maybe caching is is not required, but recommended.</p>
+		<pre class="language-python tighter">
+<code># In django_demo/settings.py
+CACHES = {
+    'default': {
+		'BACKEND': \
+			'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'djangoq-localmem',
+    }</code>
+		</pre>
+		<p class="next"><strong>All settings are done now :)</strong></p>
+	</section>
+
+	<section class="slide">
+		<h2>Writing our tasks</h2>
+		<p>Django-Q task is normal Python function.</p>
+		<pre class="language-python tighter">
+<code># fruit_shop/tasks.py
+import time
+def order_fruit(fruit, num_fruit):
+    time.sleep(num_fruit)   # e.g. 2 apples take 2 secs
+    return '%s_%s' % (fruit, num_fruit)</code>
+		</pre>
+	</section>
+
+	<section class="slide">
+		<h2>To call your <mark>async</mark> task</h2>
+		<pre class="language-python tighter">
+<code>from django_q.tasks import async, result
+task_id = async(
+    'fruit_shop.tasks.order_fruit',  # func full name
+    fruit=fruit, num_fruit=num_fruit
+)
+
+ret = result(task_id)  # get result, None if yet run
+ret = result(task_id, 200)  # block and wait for 200 ms
+</code>
+		</pre>
+	</section>
+
+	<section class="slide">
+		<h2 class="tighter">We have a functional task queue!</h2>
+		<p>Add the form and view to be used by our customers.</p>
+		<pre class="language-html tighter">
+<code>&lt;form action="{% url 'order' %}" method="post"&gt;
+	&lt;select class="form-control" name="fruit_type"&gt;
+		&lt;option&gt;Apple&lt;/option&gt; &lt;option&gt;Banana&lt;/option&gt;
+	&lt;/select&gt;
+	&lt;input type="number" name="num_fruit" min="1" max="5"&gt;
+	&lt;button type="submit"&gt;Send invitation&lt;/button&gt;
+	{% csrf_token %}
+&lt;/form&gt;</code>
+	</pre>
+	</section>
+
+	<section class="slide">
+<pre class="language-python tighter">
+<code>from django_q.humanhash import humanize
+def order(request):
+    fruit = request.POST.get('fruit_type', '')
+    num_fruit = int(request.POST.get('num_fruit', '1'))
+    task_id = <mark>async(...)</mark>  # Create async task
+    messages.info(  # Django message as notification
+        request,
+        'You ordered {fruit:s} x {num_fruit:d} (task: {task})'
+        .format(..., task=<mark>humanize(task_id)</mark>)
+    )</code>
+</pre>
+	</section>
+
+	<section class="slide">
+		<h2 class="tigher">Start the task cluster</h2>
+<pre class="language-bash"><code>$ python manage.py <mark>qcluster</mark>
+09:19:59 [Q] INFO Q Cluster-87972 starting.
+09:19:59 [Q] INFO Process-1:1 ready for work at 87974
+# ...
+09:19:59 [Q] INFO Process-1:5 monitoring at 87978
+09:19:59 [Q] INFO Process-1 guarding cluster at 87973
+09:19:59 [Q] INFO Process-1:6 pushing tasks at 87979
+09:19:59 [Q] INFO Q Cluster-87972 running.
+</code></pre>
+	</section>
+
+	<section class="slide">
+		<img class="cover w" src="pics/demo_simple.png" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>How to see my result / queue / ...?</h2>
+		<p>Through the all-mighty Django admin. (demo)</p>
+		<img class="full-width" src="pics/demo_admin_front.png" alt="">
+	</section>
+
+	<section class="slide">
+		<img class="cover w" src="pics/demo_admin_sucess.png" alt="">
+	</section>
+
+	<section class="slide">
+		<img class="cover h" src="pics/demo_admin_result.png" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Scheduling</h2>
+		<ul>
+			<li>Convenient enough to set it through Django admin</li>
+			<li>Pass function arguments via Args or Kwargs</li>
+			<li>Ex. Daily for 10 times.</li>
+			<li>Also good to schedule task to run <i>once</i> via <code>schedule(...)</code></li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<img class="cover h" src="pics/demo_admin_schedule.png" alt="">
+	</section>
+
+	<section class="slide">
+		<img class="cover w" src="pics/demo_admin_schedule_result.png" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Tutorial Summary</h2>
+		<ul>
+			<li>Basic Django-Q using Django ORM and cache</li>
+			<li>Create task using normal Python function</li>
+			<li>Run the task by <code>async</code></li>
+			<li>Start the cluster by <code>manage.py qcluster</code></li>
+			<li>View the task queue status via Django admin</li>
+			<li>Set up scheduled task</li>
+		</ul>
+	</section>
+
+
+	<!-- django-q more  -->
+	<section class="slide mid">
+		<h2>More Django-Q</h2>
+		<img src="pics/mid.jpg" class="cover w" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>How the task is store in the database?</h2>
+		<ul>
+			<li>Pickled and encrypted using Django <code>sign</code>.</li>
+			<li>Bad side:
+				Return value of the task must be picklable.
+				Everything is not readable out of Django.
+			</li>
+			<li>Good side: Just return the Python objects.</p>
+			<li>Examples:
+				<ul>
+					<li>Shell commands by <code>subprocess.run()</code> and <code>CompletedProcess</code></li>
+					<li>Complex return value by dictionary and tuple</li>
+				</ul>
+			</li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<h2 class="tighter">More informative demo by ORM</h2>
+		<pre class="language-python"><code>from django_q.models import OrmQ
+from django_q.tasks import Task
+# Select orders in queue
+queue_orders = OrmQ.objects.all().order_by('lock')
+
+# Select finished orders
+complete_orders = Task.objects.all().filter(
+    func__exact='fruit_shop.tasks.order_fruit',
+)
+		</code></pre>
+	</section>
+
+	<section class="slide">
+		<pre class="language-django"><code>{% for task in complete_orders %}
+	&lt;tr&gt;
+		&lt;td&gt;{{ task.name }}&lt;/td&gt;
+		&lt;td&gt;{{ task.kwargs.fruit }}&lt;/td&gt;
+		&lt;td&gt;{{ task.kwargs.num_fruit }}&lt;/td&gt;
+		&lt;td&gt;{{ task.result }}&lt;/td&gt;
+		&lt;td&gt;{{ task.time_taken }}&lt;/td&gt;
+		&lt;td&gt;{{ task.stopped|naturaltime }}&lt;/td&gt;
+	&lt;/tr&gt;
+{% endfor %}</code></pre>
+	</section>
+
+	<section class="slide">
+		<img class="cover w" src="pics/demo_informative.png" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Monitoring</h2>
+		<p><code>python manage.py qinfo</code></p>
+		<p><code>python manage.py qmonitor</code></p>
+	</section>
+
+	<section class="slide">
+		<h2>Tasks can be more complicated</h2>
+		<ul>
+			<li>hooks</li>
+			<li>Iterable</li>
+			<li>Chains</li>
+		</ul>
+		<p>Many examples can be found in the <a href="https://django-q.readthedocs.org/en/latest/examples.html">Examples, Documentation</a>.</p>
+		<p class="next">What if I want to run A --> B --> C --> D, but if C fails, run E then D, and when B fails, run A again with different parameter A' and skip C, .... Should I write it down in a flow chart?</p>
+	</section>
+
+	<section class="slide black">
+		<img class="cover w" src="pics/zPNrcnS.png" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Complex task, use <a href="http://www.celeryproject.org/">Celery</a> instead</h2>
+		<p>Or even more complex framework like <a href="http://luigi.readthedocs.org/en/stable/">Luigi</a> to resovle task dependency, show visualization, and handle complex failures.</p>
+		<p>Django-Q vs Celery:</p>
+		<ul>
+			<li>Django native</li>
+			<li>Easy setup</li>
+			<li>Re-use Django settings</li>
+			<li>More discussion on <a href="https://github.com/Koed00/django-q/issues/8">here</a></li>
+		</ul>
+	</section>
+
+  <section id="celery-intro" class="slide"><div>
+    <h2 class="tighter">Celery Intro</h2>
+    <figure>
+      <blockquote>
+        <p>Celery is an asynchronous distributed task queue. RabbitMQ is a message broker which implements the Advanced Message Queuing Protocol (AMQP)</p>
+        </blockquote>
+        <figcaption>Abhishek Tiwari, <a href="http://abhishek-tiwari.com/post/amqp-rabbitmq-and-celery-a-visual-guide-for-dummies" target="_blank"><i>AMQP, RabbitMQ and Celery - A Visual Guide For Dummies</i></a></figcaption>
+    </figure>
+    <ul>
+      <li>A messages or task consists of attributes (headers) and payload (body)</li>
+      <li>Messages first produced by starting a new task by producer</li>
+      <li>Messages then passed to Celery Worker (consumers, can be many)</li>
+      <li>RabbitMQ deals with the message queue;<br>
+      Celery deals with delivering your task and execution</li>
+    </ul>
+  </div></section>
+
+    <section id="celery-overview" class="slide">
+		<h2 class="tighter">Celery Overview</h2>
+		<div class="citation">
+			<img src="pics/Celery-RabbitMQ.png" alt="">
+			<p class="ref">From Abhishek Tiwari,<br /><a href="http://abhishek-tiwari.com/post/amqp-rabbitmq-and-celery-a-visual-guide-for-dummies" target="_blank"><i>AMQP, RabbitMQ and Celery - A Visual Guide For Dummies</i></a></p>
+
+		</div>
+		<style>
+			#celery-overview .citation img {
+				width: 650px;
+			}
+		</style>
+    </section>
+
+	<section class="slide" id="django-q-arch">
+		<h2>Django-Q<br>Overview</h2>
+		<img class="cover h" src="pics/djangoq_arch.png" alt="">
+		<style>
+			#django-q-arch h2 {
+				position: absolute;
+				top: 40px;
+				right: 50px;
+				text-align: right;
+				font-size: 42px;
+				line-height: 1.2em;
+			}
+		</style>
+	</section>
+
+
+	<!-- pydoctw -->
+	<section class="slide mid">
+		<h2>Python<br>官方文件<br>中文化</h2>
+		<img src="pics/mid.jpg" class="cover w" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>Live running Django-Q example</h2>
+		<ul>
+			<li>Visit <a href="https://docs.python.org.tw/_build/">https://docs.python.org.tw/_build/</a> in action</li>
+			<li>Deploy: Django + Django-Q + PostgreSQL on EC2 t2.nano</li>
+			<li>OS: Debian Jessie. 1 to none CPU; 512MB RAM</li>
+			<li>Stack: nginx + uWSGI (Emperor mode) + Django</li>
+			<li>Static files served by nginx directly</li>
+			<li>Both uWSGI and Django-Q cluster are monitored by <mark>systemd</mark></li>
+			<li>HTTPS by Let's Encrypt</li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<h2>What does the site do?</h2>
+		<ul>
+			<li>The translations are hosted on Transifex</li>
+			<li>
+				It helps you call Sphinx doc commands
+				<ol>
+					<li>Fetch new translation PO files</li>
+					<li>Build MO files</li>
+					<li>Update Spinx HTML files</li>
+				</ol>
+			</li>
+			<li>Rebuild full doc and push change to git repo daily</li>
+		</ul>
+		<p>Basically it's about calling <em>a lot of</em> shell commands.</p>
+	</section>
+
+	<section class="slide">
+		<pre class="language-python full-page"><code>@contextmanager
+def cd(newdir):
+    """Context manager for changing working directory.
+	Ref: http://stackoverflow.com/a/24176022
+    """
+    prevdir = os.getcwd()
+    os.chdir(newdir)
+    try:
+        yield
+    finally:
+        os.chdir(prevdir)</code></pre>
+	</section>
+
+	<section class="slide">
+		<pre class="language-python full-page"><code>import subprocess as sp
+def run_command_under_doc_root(cmd, catched=True):
+    with cd(newdir=settings.PYDOC_ROOT):
+        if catched:
+			process = sp.run(
+				cmd,
+				stdout=sp.PIPE, stderr=sp.PIPE
+			)
+        else:
+            process = sp.run(cmd)
+		return process</code>
+	</pre>
+	</section>
+
+	<section class="slide">
+		<pre class="language-python full-page"><code>def git_add_commit_push():
+    git_processes = OrderedDict()
+    commit_msg = 'Update translation (auto daily)'
+    commands = OrderedDict([
+        ('git_add', [GIT, 'add', 'locale/*']),
+        ('git_commit', [GIT, 'commit', '-m', commit_msg]),
+        ('git_push', [GIT, 'push']),
+    ])
+    for cmd_name, cmd in commands.items():
+		git_processes[cmd_name] = \
+			run_command_under_doc_root(cmd)
+    return git_processes
+</code>
+	</pre>
+	</section>
+
+	<section class="slide">
+		<h2>使用心得</h2>
+		<ul>
+			<li>方便維護，只要管 Django 和 cluster 有沒有正常即可</li>
+			<li>跟 systemd 整合，管理方便</li>
+			<li>Task 設 timeout 避免太多人用 queue 太長陷入無限廻圈</li>
+			<li>碰到問題：timeout 太短然後太沒錢，文件更新到一半就 timeout</li>
+			<li>只有保留一份文件，無法平行化</li>
+		</ul>
+	</section>
+
+
+	<!-- PyCon TW -->
+	<section class="slide mid">
+		<h2>PyCon TW 2016 投稿</h2>
+		<img src="pics/mid.jpg" class="cover w" alt="">
+	</section>
+
+	<section class="slide">
+		<h2>截稿前千萬別亂許願</h2>
+		<figure class="place c">
+			<blockquote data-lang="en">
+				<p lang="zh" dir="ltr">來許願好了，如果接下來 24 小時多 10 篇投稿，我就用 Python 寫一個視覺小說遊戲 <br>
+					<a href="https://twitter.com/hashtag/pycontw?src=hash">#pycontw</a>
+					<a href="https://t.co/LieWBVFiiy">https://t.co/LieWBVFiiy</a>
+				</p>
+			</blockquote>
+			<figcaption>@ccwang002 <a href="https://twitter.com/ccwang002/status/706491806309945344">March 6, 2016</a></figcaption>
+		</figure>
+	</section>
+
+	<section class="slide">
+		<img class="cover w" src="pics/renpy.png" alt="">
+	</section>
+
+	<section class="slide" id="thank">
+		<h2>跪謝大家投稿</h2>
+		<div class="citation">
+			<img src="pics/orz.png" alt="">
+			<p>Ref: Yandere Simulator</p>
+		</div>
+		<style>
+			#thank .citation {
+				width: 450px;
+				margin: 0 auto;
+			}
+		</style>
+	</section>
+
+	<section class="slide">
+		<h2>PyCon TW's call for proposal is <br>my waiting for admission</h2>
+		<ul>
+			<li>Seeking my graduation while participating in communities</li>
+			<li class="next">Learnt a lot</li>
+			<li class="next">Got my US PhD admission</li>
+			<li class="next">你是智障嗎讀 PhD？！<span class="next">YES</span></li>
+			<li class="next">Timezone: US/Central; visit me if chanced!</li>
+			<li class="next">If you're looking for studying abroad, e.g. CS master</li>
+			<li class="next">you can chat with me after the talk.</li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<h2 class="shout">Thank You!</h2>
+	</section>
+
+	<!-- End Slide -->
+	<section id='end' class='slide no-slide-number'>
+		<h2>?</h2>
+		<img src="pics/end.jpg" class="cover w" alt="">
+		<style>
+			#end h2 {
+				position: absolute;
+				left: 50%;
+				top: 40%;
+				text-align: right;
+				text-shadow: 1px 1px 3px #111;
+				font-size: 120px;
+			}
+		</style>
+	</section>
+
+
+	<!-- END OF SLIDE CONTENT -->
+	<p class="badge">
+		<a href="https://github.com/ccwang002/2016Talk-Pydoc" target="_blank">Sources on GitHub</a>
+	</p>
+	<!--
+	To hide progress bar from entire presentation
+	just remove “progress” element.
+	-->
+	<div class="progress"></div>
+
+	<!-- Library -->
+	<script src="lib/shower/shower.min.js"></script>
+	<script src="lib/highlight/highlight.pack.js" type="text/javascript" charset="utf-8"></script>
+	<script>
+		hljs.initHighlightingOnLoad();
+	</script>
+	<!-- Mathjax -->
+	<!-- During local development, use localhost mathjax for speed-->
+	<!--<script src="file:///Users/liang/.ipython/profile_default/static/mathjax/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>-->
+	<!-- online Mathjax CDN -->
+	<!--<script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>-->
+</body>
+</html>
